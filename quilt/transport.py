@@ -156,6 +156,8 @@ async def _exchange_hello(link: Link, secret: bytes, my_hello, *, dialer: bool) 
         raise AuthError("expected hello")
     if frame.get("v") != P.PROTOCOL_VERSION:
         raise AuthError(f"protocol version mismatch: {frame.get('v')}")
+    if frame.get("node_id") == my_hello["node_id"]:
+        raise AuthError(f"peer uses this member's own id {my_hello['node_id']!r}; member ids must be unique")
     their_nonce = frame["nonce"]
     await link.send({"t": P.WELCOME, "mac": _mac(secret, their_nonce, my_hello["node_id"])})
     frame2 = await asyncio.wait_for(P.read_frame(link.reader), 10.0)

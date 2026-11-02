@@ -19,7 +19,7 @@ def toy_backend(layers: int = 6) -> ToyBackend:
 
 
 async def start_mesh(n: int, *, layers: int = 6, mem_mib: list[float] | None = None, rates: list[float] | None = None,
-                     lead_timeout: float = 0.6, min_members: int = 1) -> list[QuiltNode]:
+                     lead_timeout: float = 0.6, min_members: int = 1, prefix: str = "n") -> list[QuiltNode]:
     """Start ``n`` members on loopback; the first is the bootstrap peer."""
     nodes: list[QuiltNode] = []
     spec = toy_backend(layers).spec
@@ -28,7 +28,7 @@ async def start_mesh(n: int, *, layers: int = 6, mem_mib: list[float] | None = N
         rate = rates[i] if rates else 1000.0
         bootstrap = [nodes[0].listen_addr] if nodes else []
         node = QuiltNode(
-            f"n{i}", P.Addr("127.0.0.1", 0), SECRET, toy_backend(layers), bootstrap,
+            f"{prefix}{i}", P.Addr("127.0.0.1", 0), SECRET, toy_backend(layers), bootstrap,
             api_url=f"http://127.0.0.1:{9000 + i}", mem_bytes=mem, layer_rate=rate,
             lead_interval=0.15, lead_timeout=lead_timeout, ping_interval=0.2, dead_after=0.8,
             min_members=min_members,
