@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quilt-llm"
+version = "0.1.0"
+description = "Stitch spare machines into one language model: layer-sharded inference over a self-healing device mesh."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Hemant Gupta" }]
+keywords = ["llm", "inference", "distributed", "pipeline-parallel", "mesh", "edge"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = ["torch>=2.1", "numpy>=1.24", "msgpack>=1.0", "aiohttp>=3.9"]
+
+[project.optional-dependencies]
+hf = ["transformers>=4.45", "accelerate>=0.30", "sentencepiece", "safetensors"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.5"]
+
+[project.scripts]
+quilt = "quilt.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/hemant-aigeek/quilt"
+
+[tool.setuptools.packages.find]
+include = ["quilt*"]
+
+[tool.setuptools.package-data]
+quilt = ["dashboard.html"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 140
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["B904", "E402", "E741", "B905"]

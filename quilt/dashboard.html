@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quilt</title>
+<style>
+  :root {
+    --bg: #f6f3ee; --panel: #fffdf9; --ink: #1f1b16; --muted: #6f675d; --line: #e4ddd2;
+    --accent: #b5542b; --ok: #3f7d4e; --warn: #b8860b; --bad: #a33a2c;
+    --p0:#c96a3c; --p1:#4b7f9c; --p2:#6d8f4a; --p3:#9b6bb3; --p4:#c9a03c; --p5:#3f8f8a; --p6:#b35a7a; --p7:#7a6a52;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --bg:#17150f; --panel:#1f1c15; --ink:#efe9df; --muted:#a39a8c; --line:#352f26; --accent:#e0804f; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font: 15px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display:flex; align-items:baseline; gap:16px; padding:18px 24px 6px; }
+  header h1 { margin:0; font-size:22px; letter-spacing:.02em; }
+  header h1 span { color:var(--accent); }
+  header .sub { color:var(--muted); font-size:13px; }
+  main { display:grid; grid-template-columns: 1.1fr .9fr; gap:16px; padding:12px 24px 32px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; padding:12px 16px 24px; } }
+  main > * { min-width:0; }
+  section { min-width:0; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+  h2 { margin:0 0 10px; font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); }
+  .kv { display:grid; grid-template-columns:auto 1fr; gap:4px 14px; font-size:14px; }
+  .kv b { font-weight:600; color:var(--muted); }
+  .quilt { display:flex; height:46px; border-radius:8px; overflow:hidden; border:1px solid var(--line); margin:8px 0 6px; }
+  .patch { display:flex; flex-direction:column; justify-content:center; padding:0 8px; color:#fff; font-size:12px; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .patch small { opacity:.85; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  td, th { padding:6px 6px; border-bottom:1px solid var(--line); text-align:left; }
+  th { font-weight:600; color:var(--muted); font-size:12px; }
+  .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; vertical-align:middle; }
+  .ok { background:var(--ok); } .bad { background:var(--bad); } .lead { background:var(--accent); }
+  .tag { font-size:11px; padding:1px 7px; border-radius:999px; border:1px solid var(--line); color:var(--muted); margin-left:6px; }
+  #log { height:150px; overflow:auto; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color:var(--muted); white-space:pre-wrap; }
+  #chat { height:320px; overflow:auto; padding:6px 2px; }
+  .msg { margin:6px 0; padding:8px 12px; border-radius:10px; max-width:92%; white-space:pre-wrap; overflow-wrap:anywhere; }
+  .me { background:var(--accent); color:#fff; margin-left:auto; }
+  .them { background:var(--bg); border:1px solid var(--line); }
+  .meta { font-size:11px; color:var(--muted); margin:2px 0 0 4px; }
+  form { display:flex; gap:8px; margin-top:8px; }
+  input[type=text] { flex:1; padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink); font:inherit; }
+  button { padding:10px 16px; border:0; border-radius:8px; background:var(--accent); color:#fff; font:inherit; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  .err { color:var(--bad); font-size:13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1><span>Quilt</span> — stitched model</h1>
+  <div class="sub" id="where"></div>
+</header>
+<main>
+  <div style="display:flex;flex-direction:column;gap:16px">
+    <section>
+      <h2>Layout</h2>
+      <div class="kv" id="summary"></div>
+      <div class="quilt" id="quilt"></div>
+      <div class="meta" id="planmeta"></div>
+    </section>
+    <section>
+      <h2>Members</h2>
+      <table><thead><tr><th>member</th><th>address</th><th>memory</th><th>speed</th><th>patches</th></tr></thead><tbody id="members"></tbody></table>
+    </section>
+    <section>
+      <h2>Events</h2>
+      <div id="log"></div>
+    </section>
+  </div>
+  <section>
+    <h2>Chat <span class="tag" id="sess"></span></h2>
+    <div id="chat"></div>
+    <form id="f"><input type="text" id="q" placeholder="Say something to the quilt…" autocomplete="off"><button id="send">Send</button></form>
+    <div class="err" id="err"></div>
+  </section>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+const colors = ['--p0','--p1','--p2','--p3','--p4','--p5','--p6','--p7'];
+const fmtB = b => b >= 1<<30 ? (b/(1<<30)).toFixed(1)+' GiB' : (b/(1<<20)).toFixed(0)+' MiB';
+let session = 'web-' + Math.random().toString(36).slice(2, 8);
+try { session = localStorage.getItem('quilt.session') || session; localStorage.setItem('quilt.session', session); } catch (e) {}
+$('#sess').textContent = session;
+let leaderApi = null, memberColor = {};
+
+async function refresh() {
+  try {
+    const s = await (await fetch('/v1/mesh')).json();
+    leaderApi = s.leader_api;
+    $('#where').textContent = `you are on ${s.node_id} · leader ${s.leader || '—'} · term ${s.term}`;
+    const ids = s.members.map(m => m.node_id).sort();
+    ids.forEach((id, i) => memberColor[id] = `var(${colors[i % colors.length]})`);
+    const m = s.model, p = s.plan;
+    $('#summary').innerHTML = `<b>model</b><span>${m.name} · ${m.n_layers} layers · hidden ${m.hidden} · vocab ${m.vocab}</span>
+      <b>journal</b><span>seq ${s.journal_seq} · ${s.sessions.length} session(s) · ${s.stats.turns} turns · ${s.stats.tokens} tokens · ${s.stats.failovers} failover(s)</span>`;
+    const q = $('#quilt'); q.innerHTML = '';
+    if (p) {
+      for (const pt of p.patches) {
+        const d = document.createElement('div'); d.className = 'patch';
+        d.style.flex = String(pt.stop - pt.start); d.style.background = memberColor[pt.owner] || '#888';
+        d.innerHTML = `<span>${pt.owner}</span><small>layers ${pt.start}–${pt.stop - 1}${pt.standby ? ' · standby ' + pt.standby : ''}</small>`;
+        q.appendChild(d);
+      }
+      $('#planmeta').textContent = `plan v${p.version} · bottleneck ≈ ${(p.bottleneck_s*1000).toFixed(1)} ms/token`;
+    } else $('#planmeta').textContent = 'no plan yet';
+    $('#members').innerHTML = s.members.map(mm => {
+      const pr = mm.profile || {};
+      const patches = p ? p.patches.map((pt, i) => pt.owner === mm.node_id ? `${pt.start}–${pt.stop-1}` : (pt.standby === mm.node_id ? `(sb ${pt.start}–${pt.stop-1})` : null)).filter(Boolean).join(', ') : '';
+      const dot = mm.node_id === s.leader ? 'lead' : (mm.alive ? 'ok' : 'bad');
+      return `<tr><td><span class="dot ${dot}"></span><span style="color:${memberColor[mm.node_id]}">${mm.node_id}</span>${mm.self ? '<span class="tag">you</span>' : ''}${mm.node_id === s.leader ? '<span class="tag">leader</span>' : ''}</td>
+        <td>${mm.addr}</td><td>${pr.mem_bytes ? fmtB(pr.mem_bytes) : '—'}</td><td>${pr.layer_rate ? pr.layer_rate.toFixed(0) + ' layers/s' : '—'}</td><td>${patches}</td></tr>`;
+    }).join('');
+    $('#log').textContent = s.events.join('\n'); $('#log').scrollTop = 1e9;
+  } catch (e) { $('#where').textContent = 'member unreachable: ' + e; }
+}
+refresh(); setInterval(refresh, 1500);
+
+function bubble(cls, text) { const d = document.createElement('div'); d.className = 'msg ' + cls; d.textContent = text; $('#chat').appendChild(d); $('#chat').scrollTop = 1e9; return d; }
+
+$('#f').addEventListener('submit', async ev => {
+  ev.preventDefault();
+  const prompt = $('#q').value.trim(); if (!prompt) return;
+  $('#q').value = ''; $('#err').textContent = ''; $('#send').disabled = true;
+  bubble('me', prompt);
+  const out = bubble('them', '');
+  const body = JSON.stringify({ session, prompt, max_tokens: 96, temperature: 0.8 });
+  // Talk to the leader directly when we know it; fall back to this member, which redirects.
+  const targets = leaderApi && leaderApi !== location.origin ? [leaderApi, location.origin] : [location.origin];
+  try {
+    let r = null;
+    for (const base of targets) {
+      try { r = await fetch(base + '/v1/chat', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body }); }
+      catch (e) { r = null; continue; }
+      if (r.ok) break;
+    }
+    if (!r || !r.ok) throw new Error('no leader is accepting prompts right now');
+    const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = '';
+    while (true) {
+      const { value, done } = await reader.read(); if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i; while ((i = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, i); buf = buf.slice(i + 1); if (!line) continue;
+        const e = JSON.parse(line);
+        if (e.token) out.textContent += e.token;
+        else if (e.done) { const m = document.createElement('div'); m.className = 'meta'; m.textContent = `${e.tokens} tokens · ${e.seconds}s · plan v${e.plan_version} · term ${e.term}`; $('#chat').appendChild(m); }
+        else if (e.error) $('#err').textContent = e.error;
+      }
+    }
+  } catch (e) { $('#err').textContent = String(e); }
+  $('#send').disabled = false; $('#q').focus(); refresh();
+});
+</script>
+</body>
+</html>
